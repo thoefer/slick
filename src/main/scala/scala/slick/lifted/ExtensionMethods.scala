@@ -111,12 +111,29 @@ final class OptionNumericColumnExtensionMethods[B1](val c: Rep[Option[B1]]) exte
 final class BooleanColumnExtensionMethods[P1](val c: Rep[P1]) extends AnyVal with ExtensionMethods[Boolean, P1] {
   protected[this] implicit def b1Type = implicitly[TypedType[Boolean]]
 
-  def &&[P2, R](b: Rep[P2])(implicit om: o#arg[Boolean, P2]#to[Boolean, R]) =
-    om.column(Library.And, n, b.toNode)
+  //def &&[P2, R](b: Rep[P2])(implicit om: o#arg[Boolean, P2]#to[Boolean, R]) =
+  //  om.column(Library.And, n, b.toNode)
   def ||[P2, R](b: Rep[P2])(implicit om: o#arg[Boolean, P2]#to[Boolean, R]) =
     om.column(Library.Or, n, b.toNode)
   def unary_! = Library.Not.column[Boolean](n)
 }
+
+
+
+
+final class NewBooleanColumnExtensionMethods[P1, M1 <: OptionParam.M](val c1: Rep[P1]) extends AnyVal {
+  /* We should really pass p1 as a constructor arg, but then this class couldn't be a value type.
+     Another option is to infer it as an implicit on every method but that complicates method
+     signatures and slows down type-checking. */
+  private def p1: OptionParam[_, _, M1] =
+    (if(c1.asInstanceOf[Typed].tpe.isInstanceOf[OptionType]) OptionParam.lifted[Nothing, M1] else OptionParam.plain[Nothing, M1]).asInstanceOf[OptionParam[_, _, M1]]
+
+  def &&[P2, M2 <: OptionParam.M](c2: Rep[P2])(implicit p2: OptionParam[Boolean, P2, M2]) =
+    (p1 * p2).column[Boolean](Library.And, c1.toNode, c2.toNode)
+}
+
+
+
 
 /** Extension methods for Rep[String] and Rep[Option[String]] */
 final class StringColumnExtensionMethods[P1](val c: Rep[P1]) extends AnyVal with ExtensionMethods[String, P1] {
@@ -184,6 +201,9 @@ trait ExtensionMethodConversions extends ExtensionMethodConversionsLowPriority {
   implicit def stringOptionColumnExtensionMethods(c: Rep[Option[String]]) = new StringColumnExtensionMethods[Option[String]](c)
   implicit def booleanColumnExtensionMethods(c: Rep[Boolean]) = new BooleanColumnExtensionMethods[Boolean](c)
   implicit def booleanOptionColumnExtensionMethods(c: Rep[Option[Boolean]]) = new BooleanColumnExtensionMethods[Option[Boolean]](c)
+
+  implicit def newBooleanColumnExtensionMethods(c: Rep[Boolean]) = new NewBooleanColumnExtensionMethods[Boolean, OptionParam.Plain](c)
+  implicit def newBooleanOptionColumnExtensionMethods(c: Rep[Option[Boolean]]) = new NewBooleanColumnExtensionMethods[Option[Boolean], OptionParam.Lifted](c)
 
   implicit def anyColumnExtensionMethods[B1 : BaseTypedType](c: Rep[B1]) = new AnyExtensionMethods(c.toNode)
   implicit def anyOptionColumnExtensionMethods[B1 : BaseTypedType](c: Rep[Option[B1]]) = new AnyExtensionMethods(c.toNode)

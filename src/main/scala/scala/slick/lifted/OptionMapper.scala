@@ -1,6 +1,7 @@
 package scala.slick.lifted
 
-import annotation.implicitNotFound
+import scala.language.higherKinds
+import scala.annotation.implicitNotFound
 import scala.slick.ast.{Typed, OptionApply, FunctionSymbol, BaseTypedType, Node, TypedType}
 
 trait OptionMapper[BR, R] extends (Rep[BR] => Rep[R]) {
@@ -79,4 +80,38 @@ object OptionLift extends OptionLiftLowPriority {
 
 trait OptionLiftLowPriority {
   @inline implicit def anyOptionLift[M, P](implicit shape: Shape[_ <: FlatShapeLevel, M, _, P]): OptionLift[M, Rep[Option[P]]] = null
+}
+
+
+
+@implicitNotFound("Option-mapped type mismatch;\n found   : ${P}\n required: ${B}\n       or: Option[${B}]")
+final class OptionParam[B, P, OM <: OptionParam.M](val lift: Boolean) {
+  final type R[X] = OM#Fold[Any, X, Option[X]]
+  final type * [O <: OptionParam.M] = OM#Fold[OptionParam.M, O#Fold[OptionParam.M, OptionParam.Plain, OptionParam.Lifted], OptionParam.Lifted]
+
+  final def * [O <: OptionParam.M](o: OptionParam[_, _, O]): OptionParam[Nothing, Nothing, * [O]] =
+    (if(lift || o.lift) OptionParam.liftedPrototype else OptionParam.plainPrototype).asInstanceOf[OptionParam[Nothing, Nothing, * [O]]]
+
+  final def liftedType[BR](implicit bt: TypedType[BR]): TypedType[R[BR]] =
+    (if(lift) bt.optionType else bt).asInstanceOf[TypedType[R[BR]]]
+
+  final def column[BR](fs: FunctionSymbol, ch: Node*)(implicit bt: TypedType[BR]): Rep[R[BR]] = {
+    implicit val tt = liftedType
+    Rep.forNode[R[BR]](fs.typed(tt, ch: _*))
+  }
+
+  final def apply[BR](v: Rep[BR]): Rep[R[BR]] =
+    (if(lift) Rep.forNode(OptionApply(v.toNode))(v.asInstanceOf[Typed].tpe.asInstanceOf[TypedType[BR]].optionType) else v).asInstanceOf[Rep[R[BR]]]
+}
+
+object OptionParam {
+  private final val plainPrototype = new OptionParam[Any, Any, M](false)
+  private final val liftedPrototype = new OptionParam[Any, Any, M](true)
+
+  final implicit def plain[B, OM <: M] = plainPrototype.asInstanceOf[OptionParam[B, B, Plain]]
+  final implicit def lifted[B, OM <: M] = liftedPrototype.asInstanceOf[OptionParam[B, Option[B], Lifted]]
+
+  sealed trait M { type Fold[T, X <: T, Y <: T] <: T }
+  sealed trait Plain extends M { final type Fold[T, X <: T, Y <: T] = X }
+  sealed trait Lifted extends M { final type Fold[T, X <: T, Y <: T] = Y }
 }
