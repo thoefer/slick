@@ -69,3 +69,14 @@ object OptionMapperDSL {
     }
   }
 }
+
+/** A typeclass that lifts a mixed type to the packed Option type. */
+trait OptionLift[M, O]
+
+object OptionLift extends OptionLiftLowPriority {
+  @inline implicit def repOptionLift[M <: Rep[_], P](implicit shape: Shape[_ <: FlatShapeLevel, M, _, Rep[P]]): OptionLift[M, Rep[Option[P]]] = null
+}
+
+trait OptionLiftLowPriority {
+  @inline implicit def anyOptionLift[M, P](implicit shape: Shape[_ <: FlatShapeLevel, M, _, P]): OptionLift[M, Rep[Option[P]]] = null
+}
